@@ -290,6 +290,8 @@ def uploader_fn(exit_event):
       uploader.compress(key, fn)
       continue
 
+    # TODO: Purge oldest files if running out of room.  Save at least 6 GB room.
+
     if not should_upload:
       time.sleep(5)
       continue
