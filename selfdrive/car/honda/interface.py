@@ -493,7 +493,9 @@ class CarInterface(object):
         be.pressed = False
         but = self.CS.prev_cruise_setting
       if but == 1:
-        be.type = 'altButton1'
+        be.type = 'altButton1' # lkas
+      elif but == 3:
+        be.type = 'altButton2' # acc distance setting
       # TODO: more buttons?
       buttonEvents.append(be)
     ret.buttonEvents = buttonEvents
@@ -543,12 +545,12 @@ class CarInterface(object):
     if self.CP.enableCruise and ret.vEgo < self.CP.minEnableSpeed:
       events.append(create_event('speedTooLow', [ET.NO_ENTRY]))
 
-    # disable on pedals rising edge or when brake is pressed and speed isn't zero
-    if (ret.gasPressed and not self.gas_pressed_prev) or \
+    # disable on pedals rising edge (on non-Bosch cars) or when brake is pressed and speed isn't zero
+    if (ret.gasPressed and not self.gas_pressed_prev and self.CS.CP.carFingerprint not in HONDA_BOSCH) or \
        (ret.brakePressed and (not self.brake_pressed_prev or ret.vEgo > 0.001)):
       events.append(create_event('pedalPressed', [ET.NO_ENTRY, ET.USER_DISABLE]))
 
-    if ret.gasPressed:
+    if ret.gasPressed and self.CS.CP.carFingerprint not in HONDA_BOSCH:
       events.append(create_event('pedalPressed', [ET.PRE_ENABLE]))
 
     # it can happen that car cruise disables while comma system is enabled: need to
