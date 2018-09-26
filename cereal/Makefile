@@ -23,7 +23,11 @@ endif
 ifeq ($(UNAME_M),aarch64)
 CAPNPC=PATH=$(PWD)/../phonelibs/capnp-cpp/aarch64/bin/:$$PATH capnpc
 else
+ifeq ($UNAME_M),x86_64)
+CAPNPC=PATH=$(PWD)/../phonelibs/capnp-cpp/x86_64/bin/:$$PATH capnpc
+else
 CAPNPC=capnpc
+endif
 endif
 
 .PHONY: all
