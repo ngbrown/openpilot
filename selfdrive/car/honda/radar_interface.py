@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+import math
 import os
 import zmq
 import time
@@ -22,6 +23,14 @@ def _create_nidec_can_parser():
   return CANParser(os.path.splitext(dbc_f)[0], signals, checks, 1)
 
 
+def _create_bosch_can_parser():
+  dbc_f = 'honda_accord_s2t_2018_can_generated.dbc'
+  signals = zip(['LEAD_DISTANCE'] + ['ZEROS_BOH2'], [0x39f] + [0x39f], [255] + [0])
+  checks = []
+
+  return CANParser(os.path.splitext(dbc_f)[0], signals, checks, 0)
+
+
 class RadarInterface(object):
   def __init__(self, CP):
     # radar
@@ -33,8 +42,11 @@ class RadarInterface(object):
 
     self.delay = 0.1  # Delay of radar
 
-    # Nidec
-    self.rcp = _create_nidec_can_parser()
+    if self.radar_off_can:
+      self.rcp = _create_bosch_can_parser()
+    else:
+      # Nidec
+      self.rcp = _create_nidec_can_parser()
 
     context = zmq.Context()
     self.logcan = messaging.sub_sock(context, service_list['can'].port)
@@ -45,38 +57,60 @@ class RadarInterface(object):
     updated_messages = set()
     ret = car.RadarState.new_message()
 
-    # in Bosch radar and we are only steering for now, so sleep 0.05s to keep
-    # radard at 20Hz and return no points
+    # in Bosch radar and we are only steering for now
     if self.radar_off_can:
-      time.sleep(0.05)
-      return ret
-
-    while 1:
       tm = int(sec_since_boot() * 1e9)
       updated_messages.update(self.rcp.update(tm, True))
-      if 0x445 in updated_messages:
-        break
+      for ii in updated_messages:
+        cpt = self.rcp.vl[ii]
+        lead_distance = cpt['LEAD_DISTANCE']
+        if lead_distance < 254.0:
+          lead_distance_meters = 1.79163643*math.exp(lead_distance*0.017882106)
+          #lead_distance_meters = 9.66521E-06*(lead_distance**3) -0.000700961*(lead_distance**2) +0.085745144*lead_distance
+          if ii not in self.pts:
+            # TODO detect jump in distance for a new track
+            self.pts[ii] = car.RadarState.RadarPoint.new_message()
+            self.pts[ii].trackId = self.track_id
+            self.track_id += 1
+          self.pts[ii].dRel = lead_distance_meters  # from front of car
+          self.pts[ii].yRel = 0  # in car frame's y axis, left is positive
+          self.pts[ii].vRel = 0
+          self.pts[ii].aRel = float('nan')
+          self.pts[ii].yvRel = float('nan')
+        else:
+          if ii in self.pts:
+            del self.pts[ii]
 
-    for ii in updated_messages:
-      cpt = self.rcp.vl[ii]
-      if ii == 0x400:
-        # check for radar faults
-        self.radar_fault = cpt['RADAR_STATE'] != 0x79
-        self.radar_wrong_config = cpt['RADAR_STATE'] == 0x69
-      elif cpt['LONG_DIST'] < 255:
-        if ii not in self.pts or cpt['NEW_TRACK']:
-          self.pts[ii] = car.RadarState.RadarPoint.new_message()
-          self.pts[ii].trackId = self.track_id
-          self.track_id += 1
-        self.pts[ii].dRel = cpt['LONG_DIST']  # from front of car
-        self.pts[ii].yRel = -cpt['LAT_DIST']  # in car frame's y axis, left is positive
-        self.pts[ii].vRel = cpt['REL_SPEED']
-        self.pts[ii].aRel = float('nan')
-        self.pts[ii].yvRel = float('nan')
-        self.pts[ii].measured = True
-      else:
-        if ii in self.pts:
-          del self.pts[ii]
+      self.radar_fault = False
+      self.radar_wrong_config = False
+
+    else:
+      while 1:
+        tm = int(sec_since_boot() * 1e9)
+        updated_messages.update(self.rcp.update(tm, True))
+        if 0x445 in updated_messages:
+          break
+
+      for ii in updated_messages:
+        cpt = self.rcp.vl[ii]
+        if ii == 0x400:
+          # check for radar faults
+          self.radar_fault = cpt['RADAR_STATE'] != 0x79
+          self.radar_wrong_config = cpt['RADAR_STATE'] == 0x69
+        elif cpt['LONG_DIST'] < 255:
+          if ii not in self.pts or cpt['NEW_TRACK']:
+            self.pts[ii] = car.RadarState.RadarPoint.new_message()
+            self.pts[ii].trackId = self.track_id
+            self.track_id += 1
+          self.pts[ii].dRel = cpt['LONG_DIST']  # from front of car
+          self.pts[ii].yRel = -cpt['LAT_DIST']  # in car frame's y axis, left is positive
+          self.pts[ii].vRel = cpt['REL_SPEED']
+          self.pts[ii].aRel = float('nan')
+          self.pts[ii].yvRel = float('nan')
+          self.pts[ii].measured = True
+        else:
+          if ii in self.pts:
+            del self.pts[ii]
 
     errors = []
     if not self.rcp.can_valid:
