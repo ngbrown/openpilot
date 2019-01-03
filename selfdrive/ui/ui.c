@@ -1417,74 +1417,18 @@ static void bb_ui_draw_measures_right(UIState* s, int bb_x, int bb_y, int bb_w) 
   nvgStroke(s->vg);
 }
 
-//draw grid from wiki
-static void ui_draw_vision_grid(UIState* s) {
-  const UIScene* scene = &s->scene;
-  const int grid_spacing = 30;
-
-  int ui_viz_rx = scene->ui_viz_rx;
-  int ui_viz_rw = scene->ui_viz_rw;
-
-  nvgSave(s->vg);
-
-  // path coords are worked out in rgb-box space
-  nvgTranslate(s->vg, 240.0f, 0.0);
-
-  // zooom in 2x
-  nvgTranslate(s->vg, -1440.0f/2, -1080.0f/2);
-  nvgScale(s->vg, 2.0, 2.0);
-
-  nvgScale(s->vg, 1440.0f/s->rgb_width, 1080.0f/s->rgb_height);
-
-  nvgBeginPath(s->vg);
-  nvgStrokeColor(s->vg, nvgRGBA(255, 255, 255, 128));
-  nvgStrokeWidth(s->vg, 1);
-
-  for (int i = box_y; i<box_h; i += grid_spacing) {
-    nvgMoveTo(s->vg, ui_viz_rx, i);
-    //nvgLineTo(s->vg, ui_viz_rx, i);
-    nvgLineTo(s->vg, ((ui_viz_rw+ui_viz_rx)/2)+10, i);
-  }
-
-  for (int i = ui_viz_rx+12; i<=ui_viz_rw; i += grid_spacing) {
-    nvgMoveTo(s->vg, i, 0);
-    nvgLineTo(s->vg, i, 1000);
-  }
-  nvgStroke(s->vg);
-  nvgRestore(s->vg);
-}
-
 static void bb_ui_draw_UI(UIState* s) {
-  //get 3-state switch position
-  int tri_state_fd;
-  int tri_state_switch;
-  char buffer[10];
-  tri_state_switch = 0;
-  tri_state_fd = open("/sys/devices/virtual/switch/tri-state-key/state", O_RDONLY);
-  //if we can't open then switch should be considered in the middle, nothing done
-  if (tri_state_fd==-1) {
-    tri_state_switch = 2;
-  } else {
-    read(tri_state_fd, &buffer, 10);
-    tri_state_switch = buffer[0]-48;
-    close(tri_state_fd);
-  }
-  if (tri_state_switch==1) {
-    const UIScene* scene = &s->scene;
-    const int bb_dml_w = 180;
-    const int bb_dml_x = (scene->ui_viz_rx+(bdr_s*2));
-    const int bb_dml_y = (box_y+(bdr_s*1.5))+220;
+  const UIScene* scene = &s->scene;
+  const int bb_dml_w = 180;
+  const int bb_dml_x = (scene->ui_viz_rx+(bdr_s*2));
+  const int bb_dml_y = (box_y+(bdr_s*1.5))+220;
 
-    const int bb_dmr_w = 180;
-    const int bb_dmr_x = scene->ui_viz_rx+scene->ui_viz_rw-bb_dmr_w-(bdr_s*2);
-    const int bb_dmr_y = (box_y+(bdr_s*1.5))+220;
+  const int bb_dmr_w = 180;
+  const int bb_dmr_x = scene->ui_viz_rx+scene->ui_viz_rw-bb_dmr_w-(bdr_s*2);
+  const int bb_dmr_y = (box_y+(bdr_s*1.5))+220;
 
-    bb_ui_draw_measures_left(s, bb_dml_x, bb_dml_y, bb_dml_w);
-    bb_ui_draw_measures_right(s, bb_dmr_x, bb_dmr_y, bb_dmr_w);
-  }
-  if (tri_state_switch==3) {
-    ui_draw_vision_grid(s);
-  }
+  bb_ui_draw_measures_left(s, bb_dml_x, bb_dml_y, bb_dml_w);
+  bb_ui_draw_measures_right(s, bb_dmr_x, bb_dmr_y, bb_dmr_w);
 }
 //BB END: functions added for the display of various items
 
