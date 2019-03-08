@@ -28,16 +28,17 @@ from selfdrive.locationd.calibration_helpers import Calibration, Filter
 
 ThermalStatus = log.ThermalData.ThermalStatus
 State = log.ControlsState.OpenpilotState
+LkasDisabled = False
 
 
 def isActive(state):
   """Check if the actuators are enabled"""
-  return state in [State.enabled, State.softDisabling]
+  return state in [State.enabled, State.softDisabling] and not LkasDisabled
 
 
 def isEnabled(state):
   """Check if openpilot is engaged"""
-  return (isActive(state) or state == State.preEnabled)
+  return state in [State.enabled, State.softDisabling, State.preEnabled]
 
 def events_to_bytes(events):
   # optimization when comparing capnp structs: str() or tree traverse are much slower
@@ -199,7 +200,7 @@ def state_control(frame, rcv_frame, plan, path_plan, CS, CP, state, events, v_cr
   actuators = car.CarControl.Actuators.new_message()
 
   enabled = isEnabled(state)
-  active = isActive(state)
+  active = isActive(state) and not CS.leftBlinker and not CS.rightBlinker
 
   # check if user has interacted with the car
   driver_engaged = len(CS.buttonEvents) > 0 or \
@@ -213,9 +214,15 @@ def state_control(frame, rcv_frame, plan, path_plan, CS, CP, state, events, v_cr
   if plan.fcw:
     AM.add(frame, "fcw", enabled)
 
+  # handle lkasButton
+  global LkasDisabled
+  for b in CS.buttonEvents:
+    if b.type in ["altButton1"] and b.pressed:
+      LkasDisabled = not LkasDisabled
+
   # State specific actions
 
-  if state in [State.preEnabled, State.disabled]:
+  if state in [State.preEnabled, State.disabled] or LkasDisabled or CS.leftBlinker or CS.rightBlinker:
     LaC.reset()
     LoC.reset(v_pid=CS.vEgo)
 
@@ -235,6 +242,9 @@ def state_control(frame, rcv_frame, plan, path_plan, CS, CP, state, events, v_cr
 
   a_acc_sol = plan.aStart + (dt / LON_MPC_STEP) * (plan.aTarget - plan.aStart)
   v_acc_sol = plan.vStart + dt * (a_acc_sol + plan.aStart) / 2.0
+
+  if state in [State.preEnabled, State.disabled]:
+    LkasDisabled = False
 
   # Gas/Brake PID loop
   actuators.gas, actuators.brake = LoC.update(active, CS.vEgo, CS.brakePressed, CS.standstill, CS.cruiseState.standstill,
@@ -282,7 +292,7 @@ def data_send(sm, CS, CI, CP, VM, state, events, actuators, v_cruise_kph, rk, ca
 
   CC.hudControl.setSpeed = float(v_cruise_kph * CV.KPH_TO_MS)
   CC.hudControl.speedVisible = isEnabled(state)
-  CC.hudControl.lanesVisible = isEnabled(state)
+  CC.hudControl.lanesVisible = isEnabled(state) and not LkasDisabled and not CS.leftBlinker and not CS.rightBlinker
   CC.hudControl.leadVisible = sm['plan'].hasLead
 
   right_lane_visible = sm['pathPlan'].rProb > 0.5
@@ -399,6 +409,9 @@ def controlsd_thread(gctx=None):
 
   # start the loop
   set_realtime_priority(3)
+
+  global LkasDisabled
+  LkasDisabled = False
 
   params = Params()
 
