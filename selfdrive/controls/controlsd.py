@@ -149,7 +149,7 @@ def state_transition(CS, CP, state, events, soft_disable_timer, v_cruise_kph, AM
   elif state == State.enabled:
     if get_events(events, [ET.USER_DISABLE]):
       state = State.disabled
-      AM.add("disable", enabled)
+      AM.add("userdisable", enabled)
 
     elif get_events(events, [ET.IMMEDIATE_DISABLE]):
       state = State.disabled
@@ -166,7 +166,7 @@ def state_transition(CS, CP, state, events, soft_disable_timer, v_cruise_kph, AM
   elif state == State.softDisabling:
     if get_events(events, [ET.USER_DISABLE]):
       state = State.disabled
-      AM.add("disable", enabled)
+      AM.add("userdisable", enabled)
 
     elif get_events(events, [ET.IMMEDIATE_DISABLE]):
       state = State.disabled
@@ -188,7 +188,7 @@ def state_transition(CS, CP, state, events, soft_disable_timer, v_cruise_kph, AM
   elif state == State.preEnabled:
     if get_events(events, [ET.USER_DISABLE]):
       state = State.disabled
-      AM.add("disable", enabled)
+      AM.add("userdisable", enabled)
 
     elif get_events(events, [ET.IMMEDIATE_DISABLE, ET.SOFT_DISABLE]):
       state = State.disabled
