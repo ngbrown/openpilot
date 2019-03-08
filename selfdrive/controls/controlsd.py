@@ -27,16 +27,17 @@ from selfdrive.locationd.calibration_helpers import Calibration, Filter
 
 ThermalStatus = log.ThermalData.ThermalStatus
 State = log.Live100Data.ControlState
+LkasDisabled = False
 
 
 def isActive(state):
   """Check if the actuators are enabled"""
-  return state in [State.enabled, State.softDisabling]
+  return state in [State.enabled, State.softDisabling] and not LkasDisabled
 
 
 def isEnabled(state):
   """Check if openpilot is engaged"""
-  return (isActive(state) or state == State.preEnabled)
+  return state in [State.enabled, State.softDisabling, State.preEnabled]
 
 
 def data_sample(CI, CC, plan_sock, path_plan_sock, thermal, calibration, health, driver_monitor,
@@ -208,7 +209,7 @@ def state_control(plan, path_plan, CS, CP, state, events, v_cruise_kph, v_cruise
   actuators = car.CarControl.Actuators.new_message()
 
   enabled = isEnabled(state)
-  active = isActive(state)
+  active = isActive(state) and not CS.leftBlinker and not CS.rightBlinker
 
   # check if user has interacted with the car
   driver_engaged = len(CS.buttonEvents) > 0 or \
@@ -222,9 +223,15 @@ def state_control(plan, path_plan, CS, CP, state, events, v_cruise_kph, v_cruise
   if plan.fcw:
     AM.add("fcw", enabled)
 
+  # handle lkasButton
+  global LkasDisabled
+  for b in CS.buttonEvents:
+    if b.type in ["altButton1"] and b.pressed:
+      LkasDisabled = not LkasDisabled
+
   # State specific actions
 
-  if state in [State.preEnabled, State.disabled]:
+  if state in [State.preEnabled, State.disabled] or LkasDisabled or CS.leftBlinker or CS.rightBlinker:
     LaC.reset()
     LoC.reset(v_pid=CS.vEgo)
 
@@ -238,6 +245,9 @@ def state_control(plan, path_plan, CS, CP, state, events, v_cruise_kph, v_cruise
         else:
           extra_text = str(int(round(CP.minSteerSpeed * CV.MS_TO_MPH))) + " mph"
       AM.add(e, enabled, extra_text_2=extra_text)
+
+  if state in [State.preEnabled, State.disabled]:
+    LkasDisabled = False
 
   # Run angle offset learner at 20 Hz
   if rk.frame % 5 == 2:
@@ -303,7 +313,7 @@ def data_send(plan, path_plan, CS, CI, CP, VM, state, events, actuators, v_cruis
 
     CC.hudControl.setSpeed = float(v_cruise_kph * CV.KPH_TO_MS)
     CC.hudControl.speedVisible = isEnabled(state)
-    CC.hudControl.lanesVisible = isEnabled(state)
+    CC.hudControl.lanesVisible = isEnabled(state) and not LkasDisabled and not CS.leftBlinker and not CS.rightBlinker
     CC.hudControl.leadVisible = plan.hasLead
     CC.hudControl.rightLaneVisible = bool(path_plan.pathPlan.rProb > 0.5)
     CC.hudControl.leftLaneVisible = bool(path_plan.pathPlan.lProb > 0.5)
@@ -385,6 +395,9 @@ def controlsd_thread(gctx=None, rate=100):
 
   # start the loop
   set_realtime_priority(3)
+
+  global LkasDisabled
+  LkasDisabled = False
 
   context = zmq.Context()
   params = Params()
