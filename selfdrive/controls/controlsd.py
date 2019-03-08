@@ -140,7 +140,7 @@ def state_transition(frame, CS, CP, state, events, soft_disable_timer, v_cruise_
   elif state == State.enabled:
     if get_events(events, [ET.USER_DISABLE]):
       state = State.disabled
-      AM.add(frame, "disable", enabled)
+      AM.add(frame, "userdisable", enabled)
 
     elif get_events(events, [ET.IMMEDIATE_DISABLE]):
       state = State.disabled
@@ -157,7 +157,7 @@ def state_transition(frame, CS, CP, state, events, soft_disable_timer, v_cruise_
   elif state == State.softDisabling:
     if get_events(events, [ET.USER_DISABLE]):
       state = State.disabled
-      AM.add(frame, "disable", enabled)
+      AM.add(frame, "userdisable", enabled)
 
     elif get_events(events, [ET.IMMEDIATE_DISABLE]):
       state = State.disabled
@@ -179,7 +179,7 @@ def state_transition(frame, CS, CP, state, events, soft_disable_timer, v_cruise_
   elif state == State.preEnabled:
     if get_events(events, [ET.USER_DISABLE]):
       state = State.disabled
-      AM.add(frame, "disable", enabled)
+      AM.add(frame, "userdisable", enabled)
 
     elif get_events(events, [ET.IMMEDIATE_DISABLE, ET.SOFT_DISABLE]):
       state = State.disabled
